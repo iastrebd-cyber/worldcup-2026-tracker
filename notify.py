@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 import wc_api
 from flags import flag
 from gcal import calendar_service
+from venues import venue_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("wc")
@@ -64,8 +65,10 @@ def build_description(matches: list[dict]) -> str:
         stage = STAGE_RU.get(m.get("stage", ""), m.get("stage", ""))
         grp = (m.get("group") or "").replace("GROUP_", "Группа ")
         tag = f"{stage}, {grp}" if grp else stage
+        city = venue_for(m, with_stadium=False)
+        loc = f" · {city}" if city else ""
         lines.append(
-            f"• {local:%H:%M} — {flag(home)} {home} — {away} {flag(away)}  ({tag})"
+            f"• {local:%H:%M} — {flag(home)} {home} — {away} {flag(away)}  ({tag}){loc}"
         )
     return "\n".join(lines)
 

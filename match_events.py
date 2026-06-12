@@ -9,6 +9,7 @@ Idempotency is keyed on the match id stored in extendedProperties.private:
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -16,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 import wc_api
 from flags import flag
 from gcal import calendar_service
+from venues import venue_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("wc")
@@ -27,6 +29,7 @@ TZ = "America/New_York"
 P_MANAGED = "wc2026_managed"
 P_MATCH_ID = "wc2026_match_id"
 P_START = "wc2026_start"
+P_SIG = "wc2026_sig"
 
 STAGE_RU = {
     "GROUP_STAGE": "Групповой этап",
@@ -52,7 +55,7 @@ def _title(m: dict) -> str:
 def _description(m: dict) -> str:
     stage = STAGE_RU.get(m.get("stage", ""), m.get("stage", ""))
     grp = (m.get("group") or "").replace("GROUP_", "Группа ")
-    venue = m.get("venue") or "уточняется"
+    venue = venue_for(m) or m.get("venue") or "уточняется"
     home = m.get("homeTeam", {}).get("name") or "TBD"
     away = m.get("awayTeam", {}).get("name") or "TBD"
     parts = [
@@ -64,16 +67,23 @@ def _description(m: dict) -> str:
         parts.append(f"Группа: {grp}")
     if m.get("matchday"):
         parts.append(f"Тур: {m['matchday']}")
-    parts.append(f"Стадион: {venue}")
+    parts.append(f"Город: {venue}")
     return "\n".join(parts)
 
 
 def _body(m: dict) -> dict:
     start = _parse(m["utcDate"])
     end = start + timedelta(hours=MATCH_DURATION_HOURS)
-    return {
-        "summary": _title(m),
-        "description": _description(m),
+    summary = _title(m)
+    description = _description(m)
+    location = venue_for(m)
+    # Signature over everything we render, so any content change triggers an update.
+    sig = hashlib.md5(
+        "|".join([m["utcDate"], summary, location or "", description]).encode("utf-8")
+    ).hexdigest()
+    body = {
+        "summary": summary,
+        "description": description,
         "start": {"dateTime": start.isoformat().replace("+00:00", "Z"), "timeZone": TZ},
         "end": {"dateTime": end.isoformat().replace("+00:00", "Z"), "timeZone": TZ},
         "extendedProperties": {
@@ -81,10 +91,14 @@ def _body(m: dict) -> dict:
                 P_MANAGED: "1",
                 P_MATCH_ID: str(m["id"]),
                 P_START: m["utcDate"],
+                P_SIG: sig,
             }
         },
         "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 10}]},
     }
+    if location:
+        body["location"] = location
+    return body
 
 
 def load_managed_events(service, calendar_id: str) -> dict[str, dict]:
@@ -144,15 +158,17 @@ def main() -> None:
             continue
 
         body = _body(m)
+        new_sig = body["extendedProperties"]["private"][P_SIG]
         if mid in existing:
             ev = existing[mid]
-            stored_start = ev.get("extendedProperties", {}).get("private", {}).get(P_START)
-            if stored_start == m["utcDate"]:
+            priv = ev.get("extendedProperties", {}).get("private", {})
+            if priv.get(P_SIG) == new_sig:
                 skipped += 1
                 continue
             service.events().update(calendarId=calendar_id, eventId=ev["id"], body=body).execute()
             updated += 1
-            log.info("Updated event for match %s (time changed %s -> %s)", mid, stored_start, m["utcDate"])
+            reason = "time" if priv.get(P_START) != m["utcDate"] else "content"
+            log.info("Updated event for match %s (%s changed)", mid, reason)
         else:
             service.events().insert(calendarId=calendar_id, body=body).execute()
             created += 1
