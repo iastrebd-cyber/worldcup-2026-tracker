@@ -3,14 +3,22 @@
 The football-data.org API exposes a `venue` field but it is empty for every
 WC-2026 match, so cities are provided here from the published schedule.
 
-Group-stage venues are keyed by (group, unordered team pair) — each pair meets
-exactly once per group, so the key is unique and independent of home/away order
-or kickoff timezone. This mapping was verified to cover all 72 group matches.
+Group stage: keyed by (group, unordered team pair) — each pair meets exactly
+once per group, so the key is unique regardless of home/away order or timezone.
+Verified to cover all 72 group matches.
 
-Knockout venues are not yet mapped (teams are TBD and matches are weeks away);
-`venue_for` returns None for them, and callers fall back to "уточняется".
+Knockout stage: teams are TBD, so matches are keyed by their exact kickoff
+instant (UTC). The instant is derived here from the venue's stadium and local
+kickoff time, and was verified to match all 32 football-data knockout fixtures.
+If a kickoff time later shifts, the lookup simply misses and callers fall back
+to "уточняется" — never a wrong city.
 """
 from __future__ import annotations
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_UTC = ZoneInfo("UTC")
 
 # football-data team names differ slightly from the schedule source.
 _ALIAS = {
@@ -42,8 +50,10 @@ CITY = {
     "Atlanta": ("Атланта", "Mercedes-Benz Stadium"),
 }
 
-# group | team1 | team2 | city  (from the published 2026 group-stage schedule)
-_RAW = """A|Mexico|South Africa|Guadalajara
+# ---------------------------------------------------------------------------
+# Group stage: group | team1 | team2 | city
+# ---------------------------------------------------------------------------
+_GROUP_RAW = """A|Mexico|South Africa|Guadalajara
 A|South Korea|Czechia|Atlanta
 A|Czechia|South Africa|Atlanta
 A|Mexico|South Korea|Guadalajara
@@ -116,34 +126,106 @@ L|Panama|Croatia|Toronto
 L|Panama|England|New York
 L|Croatia|Ghana|Philadelphia"""
 
+# ---------------------------------------------------------------------------
+# Knockout stage: stadium -> (Russian city, IANA timezone). The stadium is the
+# trustworthy anchor; the city/timezone are derived from it (not the source).
+# ---------------------------------------------------------------------------
+_STADIUM = {
+    "SoFi Stadium": ("Лос-Анджелес", "America/Los_Angeles"),
+    "Gillette Stadium": ("Бостон", "America/New_York"),
+    "Estadio BBVA": ("Монтеррей", "America/Monterrey"),
+    "NRG Stadium": ("Хьюстон", "America/Chicago"),
+    "AT&T Stadium": ("Даллас", "America/Chicago"),
+    "MetLife Stadium": ("Нью-Йорк", "America/New_York"),
+    "Estadio Azteca": ("Мехико", "America/Mexico_City"),
+    "Mercedes-Benz Stadium": ("Атланта", "America/New_York"),
+    "Lumen Field": ("Сиэтл", "America/Los_Angeles"),
+    "Levi's Stadium": ("Сан-Франциско", "America/Los_Angeles"),
+    "BMO Field": ("Торонто", "America/Toronto"),
+    "BC Place": ("Ванкувер", "America/Vancouver"),
+    "Hard Rock Stadium": ("Майами", "America/New_York"),
+    "Arrowhead Stadium": ("Канзас-Сити", "America/Chicago"),
+    "Lincoln Financial Field": ("Филадельфия", "America/New_York"),
+}
+
+# date | local kickoff (stadium-local 24h) | stadium
+_KNOCKOUT_RAW = """2026-06-28|12:00|SoFi Stadium
+2026-06-29|16:30|Gillette Stadium
+2026-06-29|19:00|Estadio BBVA
+2026-06-29|12:00|NRG Stadium
+2026-06-30|12:00|AT&T Stadium
+2026-06-30|17:00|MetLife Stadium
+2026-06-30|19:00|Estadio Azteca
+2026-07-01|12:00|Mercedes-Benz Stadium
+2026-07-01|13:00|Lumen Field
+2026-07-01|17:00|Levi's Stadium
+2026-07-02|12:00|SoFi Stadium
+2026-07-02|19:00|BMO Field
+2026-07-02|20:00|BC Place
+2026-07-03|13:00|AT&T Stadium
+2026-07-03|18:00|Hard Rock Stadium
+2026-07-03|20:30|Arrowhead Stadium
+2026-07-04|12:00|NRG Stadium
+2026-07-04|17:00|Lincoln Financial Field
+2026-07-05|16:00|MetLife Stadium
+2026-07-05|18:00|Estadio Azteca
+2026-07-06|14:00|AT&T Stadium
+2026-07-06|17:00|Lumen Field
+2026-07-07|12:00|Mercedes-Benz Stadium
+2026-07-07|13:00|BC Place
+2026-07-09|16:00|Gillette Stadium
+2026-07-10|12:00|SoFi Stadium
+2026-07-11|17:00|Hard Rock Stadium
+2026-07-11|20:00|Arrowhead Stadium
+2026-07-14|14:00|AT&T Stadium
+2026-07-15|15:00|Mercedes-Benz Stadium
+2026-07-18|17:00|Hard Rock Stadium
+2026-07-19|15:00|MetLife Stadium"""
+
 
 def _canon(name: str) -> str:
     name = name.strip()
     return _ALIAS.get(name, name)
 
 
-def _build() -> dict:
+def _build_group() -> dict:
     table: dict = {}
-    for line in _RAW.strip().splitlines():
+    for line in _GROUP_RAW.strip().splitlines():
         group, t1, t2, city = (x.strip() for x in line.split("|"))
         table[(group, frozenset({_canon(t1), _canon(t2)}))] = city
     return table
 
 
-_GROUP_VENUES = _build()
+def _build_knockout() -> dict:
+    table: dict = {}
+    for line in _KNOCKOUT_RAW.strip().splitlines():
+        date, local_time, stadium = (x.strip() for x in line.split("|"))
+        city, tz = _STADIUM[stadium]
+        local = datetime.strptime(f"{date} {local_time}", "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo(tz))
+        iso = local.astimezone(_UTC).strftime("%Y-%m-%dT%H:%M:00Z")
+        table[iso] = (city, stadium)
+    return table
+
+
+_GROUP_VENUES = _build_group()
+_KNOCKOUT_VENUES = _build_knockout()
 
 
 def venue_for(match: dict, with_stadium: bool = True) -> str | None:
     """Return "City (Stadium)" (or just "City") for a match, or None if unknown."""
-    if match.get("stage") != "GROUP_STAGE":
-        return None
-    group = (match.get("group") or "").replace("GROUP_", "")
-    home = (match.get("homeTeam") or {}).get("name")
-    away = (match.get("awayTeam") or {}).get("name")
-    if not home or not away:
-        return None
-    city_key = _GROUP_VENUES.get((group, frozenset({home, away})))
-    if not city_key:
-        return None
-    ru, stadium = CITY[city_key]
-    return f"{ru} ({stadium})" if with_stadium else ru
+    if match.get("stage") == "GROUP_STAGE":
+        group = (match.get("group") or "").replace("GROUP_", "")
+        home = (match.get("homeTeam") or {}).get("name")
+        away = (match.get("awayTeam") or {}).get("name")
+        if not home or not away:
+            return None
+        city_key = _GROUP_VENUES.get((group, frozenset({home, away})))
+        if not city_key:
+            return None
+        city, stadium = CITY[city_key]
+    else:
+        found = _KNOCKOUT_VENUES.get(match.get("utcDate"))
+        if not found:
+            return None
+        city, stadium = found
+    return f"{city} ({stadium})" if with_stadium else city

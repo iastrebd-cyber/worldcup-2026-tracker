@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 import wc_api
 from flags import flag
+from venues import venue_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("wc")
@@ -101,8 +102,10 @@ def build_bracket_md(matches: list[dict]) -> str | None:
             if (home and home.get("name")) or (away and away.get("name")):
                 any_team = True
             date = (m.get("utcDate") or "")[:10] or "дата TBD"
+            city = venue_for(m, with_stadium=False)
+            where = f" — {city}" if city else ""
             lines.append(
-                f"- {date}: {_team_label(home)} — {_team_label(away)}{_score(m)}"
+                f"- {date}: {_team_label(home)} — {_team_label(away)}{_score(m)}{where}"
             )
 
     if not any_team:
