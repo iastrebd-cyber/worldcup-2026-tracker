@@ -1,0 +1,82 @@
+name: WC-2026 Tracker
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"   # standings.py — every 3 hours
+    - cron: "0 13 * * *"    # notify.py    — 13:00 UTC
+    - cron: "0 1 * * *"     # notify.py    — 01:00 UTC
+    - cron: "0 */6 * * *"   # match_events.py — every 6 hours
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run"
+        type: choice
+        default: all
+        options: [all, standings, notify, match_events]
+
+permissions:
+  contents: write
+
+env:
+  FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+  GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+  GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+  WC_CALENDAR_ID: ${{ secrets.WC_CALENDAR_ID }}
+
+jobs:
+  standings:
+    # every-3-hours schedule, or manual (all/standings)
+    if: >-
+      github.event.schedule == '0 */3 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.job == 'all' || github.event.inputs.job == 'standings'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt
+      - run: python standings.py
+      - name: Commit standings
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add standings.md bracket.md 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No standings changes to commit."
+          else
+            git commit -m "chore: update standings [skip ci]"
+            git push
+          fi
+
+  notify:
+    # 13:00 / 01:00 schedules, or manual (all/notify)
+    if: >-
+      github.event.schedule == '0 13 * * *' ||
+      github.event.schedule == '0 1 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.job == 'all' || github.event.inputs.job == 'notify'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt
+      - run: python notify.py
+
+  match_events:
+    # every-6-hours schedule, or manual (all/match_events)
+    if: >-
+      github.event.schedule == '0 */6 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.job == 'all' || github.event.inputs.job == 'match_events'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt
+      - run: python match_events.py
