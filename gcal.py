@@ -21,7 +21,9 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 def _load_credentials() -> service_account.Credentials:
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if raw:
-        info = json.loads(raw)
+        # Tolerate a leading UTF-8 BOM (﻿) / surrounding whitespace that
+        # some secret stores prepend when the value is set via a pipe.
+        info = json.loads(raw.strip().lstrip("﻿").strip())
         return service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
 
     path = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "sa-key.json")
