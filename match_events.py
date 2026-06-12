@@ -1,5 +1,5 @@
 """Create / update / delete one calendar event per World Cup 2026 match in the
-next 48 hours, in the dedicated WC calendar (WC_CALENDAR_ID).
+next 7 days, in the dedicated WC calendar (WC_CALENDAR_ID).
 
 Idempotency is keyed on the match id stored in extendedProperties.private:
   * event missing            -> create it
@@ -22,7 +22,7 @@ from venues import venue_for
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("wc")
 
-WINDOW_HOURS = 48
+WINDOW_HOURS = 168  # 7 days
 MATCH_DURATION_HOURS = 2
 TZ = "America/New_York"
 

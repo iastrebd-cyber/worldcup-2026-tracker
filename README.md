@@ -10,7 +10,7 @@ driven entirely by GitHub Actions.
 | --- | --- | --- |
 | `standings.py` | Renders all 12 group tables to [`standings.md`](standings.md) and, once the group stage is over, the knockout tree to [`bracket.md`](bracket.md). Commits the result back to the repo. | every 3 h |
 | `notify.py` | Creates **one** consolidated event ("⚽ ЧМ-2026: матчи") for the next 24 h of matches in the main calendar. Times in `America/New_York`. Deletes the previous summary first. | 13:00 & 01:00 UTC |
-| `match_events.py` | Creates **one event per match** for the next 48 h in the dedicated WC calendar — 2 h long, popup reminder 10 min before. Idempotent on `match_id`: skips unchanged, updates moved, deletes cancelled. | every 6 h |
+| `match_events.py` | Creates **one event per match** for the next 7 days in the dedicated WC calendar — 2 h long, popup reminder 10 min before. Idempotent on `match_id`: skips unchanged, updates moved, deletes cancelled. | every 6 h |
 
 All jobs can also be run manually via **workflow_dispatch** (input `job`: `all`, `standings`, `notify`, `match_events`).
 
