@@ -2,10 +2,13 @@
 next 7 days, in the dedicated WC calendar (WC_CALENDAR_ID).
 
 Idempotency is keyed on the match id stored in extendedProperties.private:
-  * event missing            -> create it
-  * event exists, same time  -> skip
-  * event exists, time moved  -> update it
+  * event missing             -> create it
+  * event exists, same sig    -> skip
+  * event exists, sig changed -> update it (time moved, or final score arrived)
   * match cancelled/postponed -> delete the event
+
+A managed event is kept fresh even after kickoff falls out of the forward
+window, so the final score lands on it once the match is FINISHED.
 """
 from __future__ import annotations
 
@@ -41,14 +44,37 @@ STAGE_RU = {
     "FINAL": "Финал",
 }
 
+DURATION_RU = {
+    "EXTRA_TIME": "в доп. время",
+    "PENALTY_SHOOTOUT": "по пенальти",
+}
+
 
 def _parse(utc: str) -> datetime:
     return datetime.fromisoformat(utc.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
+def _final_score(m: dict) -> str | None:
+    """`"2:1"` once the match is over, else None (no score to show yet)."""
+    if m.get("status") != "FINISHED":
+        return None
+    ft = (m.get("score") or {}).get("fullTime") or {}
+    home, away = ft.get("home"), ft.get("away")
+    if home is None or away is None:
+        return None
+    return f"{home}:{away}"
+
+
+def _duration_note(m: dict) -> str | None:
+    return DURATION_RU.get((m.get("score") or {}).get("duration", ""))
+
+
 def _title(m: dict) -> str:
     home = m.get("homeTeam", {}).get("name") or "TBD"
     away = m.get("awayTeam", {}).get("name") or "TBD"
+    score = _final_score(m)
+    if score:
+        return f"⚽ {home} {score} {away}"
     return f"⚽ {home} — {away}"
 
 
@@ -61,8 +87,15 @@ def _description(m: dict) -> str:
     parts = [
         f"{flag(home)} {home} — {away} {flag(away)}",
         "",
-        f"Стадия: {stage}",
     ]
+    score = _final_score(m)
+    if score:
+        note = _duration_note(m)
+        result = f"Итог: {home} {score} {away}"
+        if note:
+            result += f" ({note})"
+        parts += [result, ""]
+    parts.append(f"Стадия: {stage}")
     if grp:
         parts.append(f"Группа: {grp}")
     if m.get("matchday"):
@@ -140,14 +173,17 @@ def main() -> None:
 
     created = updated = skipped = deleted = 0
 
-    # 1) Upsert matches inside the 48h window.
+    # 1) Upsert matches inside the forward window, plus any match we already have
+    #    an event for — the latter keeps the event fresh after kickoff so the
+    #    final score lands on it once the match is FINISHED (start is by then in
+    #    the past and would otherwise fall outside the window).
     for m in all_matches:
         if not m.get("utcDate"):
             continue
         when = _parse(m["utcDate"])
-        if not (now <= when <= horizon):
-            continue
         mid = str(m["id"])
+        if not (now <= when <= horizon or mid in existing):
+            continue
         status = m.get("status")
 
         if status in {"CANCELLED", "POSTPONED"}:
