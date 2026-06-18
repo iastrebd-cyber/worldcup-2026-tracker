@@ -8,7 +8,9 @@ Idempotency is keyed on the match id stored in extendedProperties.private:
   * match cancelled/postponed -> delete the event
 
 A managed event is kept fresh even after kickoff falls out of the forward
-window, so the final score lands on it once the match is FINISHED.
+window: the upsert loop runs over the union of the API match list and the ids
+we already have events for, fetching a single match on demand when the bulk
+feed has dropped it, so the final score lands on it once the match is FINISHED.
 """
 from __future__ import annotations
 
@@ -33,6 +35,7 @@ P_MANAGED = "wc2026_managed"
 P_MATCH_ID = "wc2026_match_id"
 P_START = "wc2026_start"
 P_SIG = "wc2026_sig"
+P_FINAL = "wc2026_final"  # "1" once the final score has been rendered onto the event
 
 STAGE_RU = {
     "GROUP_STAGE": "Групповой этап",
@@ -125,6 +128,7 @@ def _body(m: dict) -> dict:
                 P_MATCH_ID: str(m["id"]),
                 P_START: m["utcDate"],
                 P_SIG: sig,
+                P_FINAL: "1" if _final_score(m) else "0",
             }
         },
         "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 10}]},
@@ -171,17 +175,32 @@ def main() -> None:
     now = datetime.now(timezone.utc)
     horizon = now + timedelta(hours=WINDOW_HOURS)
 
-    created = updated = skipped = deleted = 0
+    created = updated = skipped = deleted = fetched = 0
 
-    # 1) Upsert matches inside the forward window, plus any match we already have
-    #    an event for — the latter keeps the event fresh after kickoff so the
-    #    final score lands on it once the match is FINISHED (start is by then in
-    #    the past and would otherwise fall outside the window).
-    for m in all_matches:
+    # Upsert every match in the forward window AND every match we already have an
+    # event for. Iterating the union of both id sets — not just the bulk API
+    # list — is what keeps a managed event fresh after kickoff: the competition
+    # feed stops returning older finished matches, so an event whose match has
+    # dropped out (`mid` in existing but not in by_id) would otherwise never be
+    # revisited and never receive its final score. For those we fetch the match
+    # on its own, unless the score has already landed (P_FINAL == "1").
+    for mid in sorted(set(by_id) | set(existing)):
+        m = by_id.get(mid)
+        if m is None:
+            priv = existing[mid].get("extendedProperties", {}).get("private", {})
+            if priv.get(P_FINAL) == "1":
+                skipped += 1  # final score already on the event — nothing to fetch
+                continue
+            try:
+                m = wc_api.match(mid)
+                fetched += 1
+            except Exception as exc:  # match genuinely gone; leave the event as-is
+                log.warning("Could not fetch dropped match %s: %s", mid, exc)
+                continue
+
         if not m.get("utcDate"):
             continue
         when = _parse(m["utcDate"])
-        mid = str(m["id"])
         if not (now <= when <= horizon or mid in existing):
             continue
         status = m.get("status")
@@ -210,18 +229,10 @@ def main() -> None:
             created += 1
             log.info("Created event for match %s at %s", mid, m["utcDate"])
 
-    # 2) Delete events whose match was cancelled/postponed (even outside the window).
-    for mid, ev in existing.items():
-        match = by_id.get(mid)
-        if match and match.get("status") in {"CANCELLED", "POSTPONED"}:
-            try:
-                service.events().delete(calendarId=calendar_id, eventId=ev["id"]).execute()
-                deleted += 1
-                log.info("Deleted event for cancelled match %s", mid)
-            except Exception as exc:  # already gone
-                log.warning("Could not delete %s: %s", mid, exc)
-
-    log.info("Done. created=%d updated=%d skipped=%d deleted=%d", created, updated, skipped, deleted)
+    log.info(
+        "Done. created=%d updated=%d skipped=%d deleted=%d fetched=%d",
+        created, updated, skipped, deleted, fetched,
+    )
 
 
 if __name__ == "__main__":

@@ -90,3 +90,15 @@ def standings() -> dict[str, Any]:
 
 def matches() -> dict[str, Any]:
     return get(f"competitions/{COMPETITION}/matches")
+
+
+def match(match_id: str | int) -> dict[str, Any]:
+    """Fetch a single match by id.
+
+    Used for matches that have dropped out of the bulk `matches()` list (the
+    competition feed stops returning older finished matches) so the final score
+    can still be rendered onto an existing managed event.
+    """
+    resp = get(f"matches/{match_id}")
+    # v4 returns the match object at the top level; tolerate a `match` wrapper.
+    return resp.get("match", resp)
