@@ -39,3 +39,34 @@ python match_events.py
 
 API usage stays under the free-tier limit of 10 requests/minute, with automatic
 retries on HTTP 429.
+
+## 🌐 Standings web page (GitHub Pages)
+
+A standalone, **script-free** HTML page (works inside the Telegram in-app
+browser, which does not run JavaScript) showing the live group tables and a
+knockout-bracket placeholder. All rendering happens at build time in Python.
+
+| File | Purpose |
+| --- | --- |
+| `template.html` | Layout + CSS only, no `<script>`. Tabs are pure CSS (hidden `radio` + `label`). Has two markers: `<!-- GROUPS -->` and `<!-- UPDATED -->`. |
+| `build_table.py` | Fills the template and writes `docs/index.html`. Live mode pulls `/v4/competitions/WC/standings` and `/matches`; `--mock` uses `mock_data.py` for offline builds. |
+| `mock_data.py` | Offline group-stage snapshot (18 June 2026). |
+| `.github/workflows/build-table.yml` | Builds and deploys the page to Pages — every 2 h, on manual dispatch, and on push to `main` touching `build_table.py` / `template.html` / the workflow. |
+
+### Setup
+
+1. **Files** — drop `template.html`, `build_table.py`, `mock_data.py` in the repo
+   root and the workflow under `.github/workflows/`.
+2. **Secret** — set the Actions secret **`FOOTBALL_DATA_API_KEY`** to a freshly
+   **re-issued** football-data.org token.
+3. **Pages** — in **Settings → Pages**, set **Source = GitHub Actions**.
+4. **First run** — trigger it once via **Actions → Build standings page →
+   Run workflow** (the schedule takes over afterwards).
+
+### Local build
+
+```powershell
+python build_table.py --mock     # offline, writes docs/index.html
+$env:FOOTBALL_DATA_API_KEY="..."
+python build_table.py            # live data
+```
