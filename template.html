@@ -332,6 +332,16 @@
     text-align:center;color:var(--line);
     font-family:var(--font-head);font-size:11px;letter-spacing:.2em;
   }
+  .tie__vs--score{
+    color:#7ce0ac;font-weight:700;font-size:13px;letter-spacing:0;
+  }
+  .tie__name{
+    display:flex;align-items:center;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .tie__team--win{color:var(--text);font-weight:700}
+  .tie__team--lose{color:var(--muted)}
+  .tie--tbd .tie__name{opacity:.6}
   .round--final{justify-content:center}
   .cup{
     text-align:center;
@@ -407,71 +417,7 @@
     <section class="panel panel--bracket" aria-label="Сетка плей-офф">
       <div class="bracket-scroll">
         <div class="bracket">
-
-          <div class="round">
-            <div class="round__head">
-              <h3 class="round__title">1/16 финала</h3>
-              <div class="round__dates">28 июня – 3 июля</div>
-            </div>
-            <div class="round__body">
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>2-е место</span></span></div>
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>2-е место</span></span></div>
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>2-е место</span></span></div>
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>2-е место</span></span></div>
-            </div>
-          </div>
-
-          <div class="round">
-            <div class="round__head">
-              <h3 class="round__title">1/8 финала</h3>
-              <div class="round__dates">4 – 7 июля</div>
-            </div>
-            <div class="round__body">
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>Победитель</span></span></div>
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>Победитель</span></span></div>
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>Победитель</span></span></div>
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>Победитель</span></span></div>
-            </div>
-          </div>
-
-          <div class="round">
-            <div class="round__head">
-              <h3 class="round__title">1/4 финала</h3>
-              <div class="round__dates">9 – 11 июля</div>
-            </div>
-            <div class="round__body">
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>Победитель</span></span></div>
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>Победитель</span></span></div>
-            </div>
-          </div>
-
-          <div class="round">
-            <div class="round__head">
-              <h3 class="round__title">1/2 финала</h3>
-              <div class="round__dates">14 – 15 июля</div>
-            </div>
-            <div class="round__body">
-              <div class="tie"><span class="tie__team"><span>Победитель</span></span><span class="tie__vs">VS</span><span class="tie__team"><span>Победитель</span></span></div>
-            </div>
-          </div>
-
-          <div class="round round--final">
-            <div class="round__head">
-              <h3 class="round__title">Финал</h3>
-              <div class="round__dates">19 июля</div>
-            </div>
-            <div class="round__body">
-              <div class="cup">🏆</div>
-              <div class="final-card">
-                <h3>Финал</h3>
-                <p class="big">19 июля</p>
-                <p>MetLife Stadium</p>
-                <p>Ист-Резерфорд, Нью-Джерси</p>
-                <p>Матч за 3-е место — 18 июля</p>
-              </div>
-            </div>
-          </div>
-
+          <!-- BRACKET -->
         </div>
       </div>
     </section>

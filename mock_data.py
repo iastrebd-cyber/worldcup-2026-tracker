@@ -139,3 +139,57 @@ MATCHES: dict[str, list[tuple]] = {
         ("Ghana", 1, 0, "Panama"),
     ],
 }
+
+# Offline knockout snapshot used only to exercise the bracket renderer
+# (`build_table.py --mock`). Live builds pull this straight from the API, which
+# fills in each round's pairings and advances winners on its own.
+#
+# Shape per stage: list of (home_english, home_goals, away_goals, away_english).
+# Use None for goals when the match has not been played yet, and None for a team
+# name when the slot is still to be determined.
+KNOCKOUT: dict[str, list[tuple]] = {
+    "LAST_32": [
+        ("Mexico", 2, 0, "Switzerland"),
+        ("Germany", 3, 1, "South Korea"),
+        ("Brazil", 2, 1, "Japan"),
+        ("United States", 1, 0, "Morocco"),
+        ("France", 2, 0, "Senegal"),
+        ("England", 3, 2, "Ghana"),
+        ("Argentina", 2, 1, "Australia"),
+        ("Spain", 1, 0, "Uruguay"),
+        ("Netherlands", 2, 1, "Sweden"),
+        ("Portugal", 2, 0, "Colombia"),
+        ("Croatia", 1, 0, "Norway"),
+        ("Belgium", 2, 1, "Egypt"),
+        ("Canada", 1, 0, "Austria"),
+        ("Iran", 2, 1, "New Zealand"),
+        ("Scotland", 1, 0, "Haiti"),
+        ("Ivory Coast", 2, 1, "Ecuador"),
+    ],
+    "LAST_16": [
+        ("Mexico", 1, 0, "Germany"),
+        ("Brazil", 2, 1, "United States"),
+        ("France", 2, 0, "England"),
+        ("Argentina", 1, 0, "Spain"),
+        ("Netherlands", 2, 1, "Portugal"),
+        ("Croatia", 1, 0, "Belgium"),
+        ("Canada", 2, 1, "Iran"),
+        ("Scotland", 1, 0, "Ivory Coast"),
+    ],
+    "QUARTER_FINALS": [
+        ("Mexico", 0, 2, "Brazil"),
+        ("France", 1, 2, "Argentina"),
+        ("Netherlands", 2, 1, "Croatia"),
+        ("Canada", 1, 0, "Scotland"),
+    ],
+    "SEMI_FINALS": [
+        ("Brazil", 1, 2, "Argentina"),
+        ("Netherlands", 2, 0, "Canada"),
+    ],
+    "FINAL": [
+        ("Argentina", 2, 1, "Netherlands"),
+    ],
+    "THIRD_PLACE": [
+        ("Brazil", 3, 1, "Canada"),
+    ],
+}
